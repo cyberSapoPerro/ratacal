@@ -1,21 +1,28 @@
 use time::OffsetDateTime;
 
-use crossterm::event::{
-    self,
-    Event,
-    KeyCode,
-    KeyEvent,
-    KeyEventKind
-};
+use crossterm::event;
+use crossterm::event::Event;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyEventKind;
 
-use ratatui::{
-    DefaultTerminal,
-    Frame,
-    buffer::Buffer,
-    layout::Rect,
-    style::{Modifier, Style},
-    widgets::{Block, Widget, Padding, calendar::{CalendarEventStore, Monthly}}
-};
+use ratatui::DefaultTerminal;
+use ratatui::Frame;
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
+use ratatui::style::Modifier;
+use ratatui::style::Style;
+use ratatui::widgets::Block;
+use ratatui::widgets::Widget;
+use ratatui::widgets::Padding;
+use ratatui::widgets::calendar::CalendarEventStore;
+use ratatui::widgets::calendar::Monthly;
+
+use ratatui::layout::Layout;
+use ratatui::layout::Constraint;
+use ratatui::layout::Direction;
+
+use ratatui::widgets::Paragraph;
 
 #[derive(Debug, Default)]
 pub struct App {
@@ -59,15 +66,26 @@ impl App {
 
 impl Widget for &App {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let date = OffsetDateTime::now_utc().date();
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(8),
+                Constraint::Min(0),
+            ])
+            .split(area);
+
         Monthly::new(
-            date,
+            OffsetDateTime::now_utc().date(),
             CalendarEventStore::today(Style::default().red().bold()),
         )
             .block(Block::new().padding(Padding::new(0,0,2,0)))
             .show_month_header(Modifier::BOLD)
             .show_weekdays_header(Modifier::ITALIC)
-            .render(area, buf);
+            .render(chunks[0], buf);
+
+        Paragraph::new("Hello from ratatui!\nPress 'q' to quit.")
+            .block(Block::default().title("Info").borders(ratatui::widgets::Borders::ALL))
+            .render(chunks[1], buf);
 
     }
 }
