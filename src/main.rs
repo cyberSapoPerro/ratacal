@@ -1,13 +1,13 @@
-// use std::default;
-
-use ratatui::widgets::Borders;
 use time::OffsetDateTime;
+use time::Time;
+use time::format_description::parse;
+use time::macros::format_description;
 
-use crossterm::event;
 use crossterm::event::Event;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
+use crossterm::event;
 
 use ratatui::DefaultTerminal;
 use ratatui::Frame;
@@ -19,6 +19,8 @@ use ratatui::layout::Rect;
 use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::widgets::Block;
+use ratatui::widgets::Borders;
+use ratatui::widgets::Cell;
 use ratatui::widgets::Padding;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Row;
@@ -26,12 +28,11 @@ use ratatui::widgets::Table;
 use ratatui::widgets::Widget;
 use ratatui::widgets::calendar::CalendarEventStore;
 use ratatui::widgets::calendar::Monthly;
-use ratatui::widgets::Cell;
 
 #[derive(Debug)]
 struct Entry {
     description: String,
-    hour: String,
+    hour: Time,
 }
 
 #[derive(Debug, Default)]
@@ -121,11 +122,17 @@ impl App {
         }
     }
 
-    fn submit_event(&mut self){
+    fn submit_event(&mut self) {
+        // TODO Handle errors properly
+        let format = parse("[hour][minute]").unwrap();
+        let hour_str = self.input_hour.clone();
+        let hour = Time::parse(&hour_str, &format).unwrap();
+
         self.entries.push(Entry {
             description: self.input_desc.clone(),
-            hour: self.input_hour.clone(),
+            hour,
         });
+        self.entries.sort_by_key(|e| e.hour);
         self.reset_input();
     }
 
@@ -164,10 +171,12 @@ impl Widget for &App {
             .show_weekdays_header(Modifier::ITALIC)
             .render(chunks[0], buf);
 
+        let format = format_description!("[hour]:[minute]");
         let mut rows: Vec<Row> = Vec::new();
         for e in &self.entries {
+            let hour_str = e.hour.format(&format).unwrap();
             rows.push(Row::new(vec![
-                Cell::from(e.hour.as_str()),
+                Cell::from(hour_str),
                 Cell::from(e.description.as_str()),
             ]));
         }
