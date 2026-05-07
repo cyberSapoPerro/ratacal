@@ -35,6 +35,7 @@ use ratatui::widgets::calendar::Monthly;
 struct Entry {
     description: String,
     hour: Time,
+    day: Date,
 }
 
 #[derive(Debug)]
@@ -45,6 +46,7 @@ pub struct App {
 
     // input state
     input_mode: InputMode,
+    input_date: String,
     input_desc: String,
     input_hour: String,
 }
@@ -56,6 +58,7 @@ impl Default for App {
             entries: Vec::new(),
             date: OffsetDateTime::now_utc().date(),
             input_mode: InputMode::default(),
+            input_date: String::new(),
             input_desc: String::new(),
             input_hour: String::new(),
         }
@@ -66,6 +69,7 @@ impl Default for App {
 enum InputMode {
     #[default]
     Normal,
+    EditingDate,
     EditingDescription,
     EditingHour,
 }
@@ -99,7 +103,7 @@ impl App {
                 match key.code {
                     KeyCode::Char('q') => self.exit(),
                     KeyCode::Char('a') => {
-                        self.input_mode = InputMode::EditingDescription;
+                        self.input_mode = InputMode::EditingDate;
                     }
                     KeyCode::Char('t') => {
                         self.date += Duration::days(1);
@@ -121,6 +125,22 @@ impl App {
                     }
                     _ => {}
                 },
+
+            InputMode::EditingDate => match key.code {
+                KeyCode::Enter => {
+                    self.input_mode = InputMode::EditingDescription;
+                }
+                KeyCode::Char(c) => {
+                    self.input_date.push(c);
+                }
+                KeyCode::Backspace => {
+                    self.input_date.pop();
+                }
+                KeyCode::Esc => {
+                    self.cancel_input();
+                }
+                _ => {}
+            },
 
             InputMode::EditingDescription => match key.code {
                 KeyCode::Enter => {
@@ -158,13 +178,18 @@ impl App {
 
     fn submit_event(&mut self) {
         // TODO Handle errors properly
-        let format = parse("[hour][minute]").unwrap();
+        let format_hour = parse("[hour][minute]").unwrap();
         let hour_str = self.input_hour.clone();
-        let hour = Time::parse(&hour_str, &format).unwrap();
+        let hour = Time::parse(&hour_str, &format_hour).unwrap();
+
+        let format_date = parse("[year]-[month]-[day]").unwrap();
+        let date_str = self.input_date.clone();
+        let day = Date::parse(&date_str, &format_date).unwrap();
 
         self.entries.push(Entry {
             description: self.input_desc.clone(),
             hour,
+            day,
         });
         self.entries.sort_by_key(|e| e.hour);
         self.reset_input();
@@ -198,6 +223,13 @@ impl Widget for &App {
 
         let mut events = CalendarEventStore::default();
 
+        for e in &self.entries {
+            events.add(
+                e.day,
+                Style::default().blue().bold(),
+                );
+        }
+
         events.add(
             self.date,
             Style::default().red().bold(),
@@ -212,6 +244,9 @@ impl Widget for &App {
         let format = format_description!("[hour]:[minute]");
         let mut rows: Vec<Row> = Vec::new();
         for e in &self.entries {
+            if e.day != self.date {
+                continue;
+            }
             let hour_str = e.hour.format(&format).unwrap();
             rows.push(Row::new(vec![
                 Cell::from(hour_str),
@@ -236,6 +271,9 @@ impl Widget for &App {
             .render(chunks[1], buf);
 
         let input = match self.input_mode {
+            InputMode::EditingDate => {
+                Paragraph::new(format!("Date: {}", self.input_date))
+            }
             InputMode::EditingDescription => {
                 Paragraph::new(format!("Desc: {}", self.input_desc))
             }
