@@ -1,3 +1,5 @@
+use time::Date;
+use time::Duration;
 use time::OffsetDateTime;
 use time::Time;
 use time::format_description::parse;
@@ -35,15 +37,29 @@ struct Entry {
     hour: Time,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct App {
     exit: bool,
     entries: Vec<Entry>,
+    date: Date,
 
     // input state
     input_mode: InputMode,
     input_desc: String,
     input_hour: String,
+}
+
+impl Default for App {
+    fn default() -> Self {
+        Self {
+            exit: false,
+            entries: Vec::new(),
+            date: OffsetDateTime::now_utc().date(),
+            input_mode: InputMode::default(),
+            input_desc: String::new(),
+            input_hour: String::new(),
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -84,6 +100,24 @@ impl App {
                     KeyCode::Char('q') => self.exit(),
                     KeyCode::Char('a') => {
                         self.input_mode = InputMode::EditingDescription;
+                    }
+                    KeyCode::Char('t') => {
+                        self.date += Duration::days(1);
+                    }
+                    KeyCode::Char('T') => {
+                        self.date -= Duration::days(1);
+                    }
+                    KeyCode::Char('w') => {
+                        self.date += Duration::weeks(1);
+                    }
+                    KeyCode::Char('W') => {
+                        self.date -= Duration::weeks(1);
+                    }
+                    KeyCode::Char('m') => {
+                        self.date += Duration::weeks(4);
+                    }
+                    KeyCode::Char('M') => {
+                        self.date -= Duration::weeks(4);
                     }
                     _ => {}
                 },
@@ -156,16 +190,20 @@ impl Widget for &App {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(8),
+                Constraint::Length(10),
                 Constraint::Min(0),
                 Constraint::Length(3),
             ])
             .split(area);
 
-        Monthly::new(
-            OffsetDateTime::now_utc().date(),
-            CalendarEventStore::today(Style::default().red().bold()),
-        )
+        let mut events = CalendarEventStore::default();
+
+        events.add(
+            self.date,
+            Style::default().red().bold(),
+            );
+
+        Monthly::new(self.date, events)
             .block(Block::new().padding(Padding::new(0,0,2,0)))
             .show_month_header(Modifier::BOLD)
             .show_weekdays_header(Modifier::ITALIC)
