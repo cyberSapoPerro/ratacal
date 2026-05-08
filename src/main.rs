@@ -215,11 +215,25 @@ impl Widget for &App {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(10),
+                Constraint::Length(12),
                 Constraint::Min(0),
                 Constraint::Length(3),
             ])
             .split(area);
+
+        let calendar_block = Block::default()
+            .borders(Borders::ALL);
+        let inner = calendar_block.inner(chunks[0]);
+        calendar_block.render(chunks[0], buf);
+
+        let calendar_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(33),
+                Constraint::Percentage(34),
+                Constraint::Percentage(33),
+            ])
+            .split(inner);
 
         let mut events = CalendarEventStore::default();
 
@@ -235,11 +249,31 @@ impl Widget for &App {
             Style::default().red().bold(),
             );
 
-        Monthly::new(self.date, events)
-            .block(Block::new().padding(Padding::new(0,0,2,0)))
+        let year = self.date.year();
+
+        let prev_month = self.date.month().previous();
+        let next_month = self.date.month().next();
+
+        let prev_month_date = Date::from_calendar_date(year, prev_month, 1).unwrap();
+        let next_month_date = Date::from_calendar_date(year, next_month, 1).unwrap();
+        
+        Monthly::new(prev_month_date, events.clone())
+            .block(Block::new().borders(Borders::ALL).padding(Padding::new(1,0,0,0)))
             .show_month_header(Modifier::BOLD)
             .show_weekdays_header(Modifier::ITALIC)
-            .render(chunks[0], buf);
+            .render(calendar_chunks[0], buf);
+
+        Monthly::new(self.date, events.clone())
+            .block(Block::new().borders(Borders::ALL).padding(Padding::new(1,0,0,0)))
+            .show_month_header(Modifier::BOLD)
+            .show_weekdays_header(Modifier::ITALIC)
+            .render(calendar_chunks[1], buf);
+
+        Monthly::new(next_month_date, events.clone())
+            .block(Block::new().borders(Borders::ALL).padding(Padding::new(1,0,0,0)))
+            .show_month_header(Modifier::BOLD)
+            .show_weekdays_header(Modifier::ITALIC)
+            .render(calendar_chunks[2], buf);
 
         let format = format_description!("[hour]:[minute]");
         let mut rows: Vec<Row> = Vec::new();
@@ -266,7 +300,7 @@ impl Widget for &App {
                 .style(Style::new().bold())
                 .bottom_margin(1),
                 )
-            .block(Block::new().title("Today").borders(ratatui::widgets::Borders::ALL))
+            .block(Block::new().title("Today").borders(Borders::ALL))
             .highlight_symbol(">>")
             .render(chunks[1], buf);
 
