@@ -14,6 +14,7 @@ use crossterm::event;
 use ratatui::DefaultTerminal;
 use ratatui::Frame;
 use ratatui::buffer::Buffer;
+use ratatui::layout::Alignment;
 use ratatui::layout::Constraint;
 use ratatui::layout::Direction;
 use ratatui::layout::Layout;
@@ -221,6 +222,7 @@ impl Widget for &App {
             ])
             .split(area);
 
+        // Calendar
         let calendar_block = Block::default()
             .borders(Borders::ALL);
         let inner = calendar_block.inner(chunks[0]);
@@ -246,7 +248,7 @@ impl Widget for &App {
 
         events.add(
             self.date,
-            Style::default().red().bold(),
+            Style::default().yellow().bold(),
             );
 
         let year = self.date.year();
@@ -254,6 +256,7 @@ impl Widget for &App {
         let prev_month = self.date.month().previous();
         let next_month = self.date.month().next();
 
+        // TODO if prev_month == jann then year -= 1
         let prev_month_date = Date::from_calendar_date(year, prev_month, 1).unwrap();
         let next_month_date = Date::from_calendar_date(year, next_month, 1).unwrap();
         
@@ -282,27 +285,48 @@ impl Widget for &App {
                 continue;
             }
             let hour_str = e.hour.format(&format).unwrap();
-            rows.push(Row::new(vec![
-                Cell::from(hour_str),
-                Cell::from(e.description.as_str()),
-            ]));
+            rows.push(
+                Row::new(vec![
+                    Cell::from(hour_str),
+                    Cell::from(e.description.as_str()),
+                    ]
+                )
+            );
         }
 
         let widths = [
-            Constraint::Length(5),
-            Constraint::Length(5),
+            Constraint::Percentage(20),
+            Constraint::Percentage(80),
         ];
 
+        let table_area = Layout::horizontal([
+            Constraint::Fill(1),
+            Constraint::Percentage(70),
+            Constraint::Fill(1),
+        ])
+            .split(chunks[1])[1];
+
         Table::new(rows, widths)
-            .column_spacing(1)
+            .column_spacing(2)
             .header(
-                Row::new(vec!["Hour", "Desc"])
-                .style(Style::new().bold())
+                Row::new(vec!["Hour", "Description"])
+                .style(
+                    Style::default()
+                    .bold()
+                    .underlined()
+                    )
                 .bottom_margin(1),
                 )
-            .block(Block::new().title("Today").borders(Borders::ALL))
+            .block(
+                Block::default()
+                .title(" Today ")
+                .title_alignment(Alignment::Center)
+                .borders(Borders::ALL)
+                .border_set(ratatui::symbols::border::ROUNDED)
+                .padding(Padding::horizontal(1))
+            )
             .highlight_symbol(">>")
-            .render(chunks[1], buf);
+            .render(table_area, buf);
 
         let input = match self.input_mode {
             InputMode::EditingDate => {
