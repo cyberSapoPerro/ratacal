@@ -1,5 +1,6 @@
 use time::Date;
 use time::Duration;
+use time::Month;
 use time::OffsetDateTime;
 use time::Time;
 use time::format_description::parse;
@@ -256,8 +257,12 @@ impl Widget for &App {
         let prev_month = self.date.month().previous();
         let next_month = self.date.month().next();
 
-        // TODO if prev_month == jann then year -= 1
-        let prev_month_date = Date::from_calendar_date(year, prev_month, 1).unwrap();
+        let prev_month_year = match self.date.month() {
+            Month::January => self.date.year() - 1,
+            _ => self.date.year()
+        };
+
+        let prev_month_date = Date::from_calendar_date(prev_month_year, prev_month, 1).unwrap();
         let next_month_date = Date::from_calendar_date(year, next_month, 1).unwrap();
         
         Monthly::new(prev_month_date, events.clone())
