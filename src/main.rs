@@ -1,3 +1,11 @@
+use std::env;
+use std::fs;
+use std::io::Result;
+use std::io::stdout;
+use std::path::PathBuf;
+use std::process::Command;
+
+use crossterm::terminal;
 use time::Date;
 use time::Duration;
 use time::Month;
@@ -11,6 +19,11 @@ use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event;
+use crossterm::execute;
+use crossterm::terminal::EnterAlternateScreen;
+use crossterm::terminal::LeaveAlternateScreen;
+use crossterm::terminal::disable_raw_mode;
+use crossterm::terminal::enable_raw_mode;
 
 use ratatui::DefaultTerminal;
 use ratatui::Frame;
@@ -32,6 +45,43 @@ use ratatui::widgets::Table;
 use ratatui::widgets::Widget;
 use ratatui::widgets::calendar::CalendarEventStore;
 use ratatui::widgets::calendar::Monthly;
+
+fn data_dir() -> PathBuf {
+    let home = env::var("HOME").unwrap();
+    PathBuf::from(home)
+        .join(".local")
+        .join("share")
+        .join("ratacal")
+}
+
+fn open_editor() -> Result<()> {
+    let base_dir = data_dir();
+    fs::create_dir_all(&base_dir).unwrap();
+    let fp = base_dir.join("note.md");
+    if !fp.exists() {
+        fs::write(&fp, "")?;
+    }
+    Command::new("nvim")
+        .arg(&fp)
+        .status()
+        .unwrap();
+    let content = fs::read_to_string(&fp)?;
+    Ok(())
+    // content
+}
+
+fn restore_terminal() -> Result<()> {
+    disable_raw_mode()?;
+    execute!(stdout(), LeaveAlternateScreen)?;
+    Ok(())
+}
+
+fn init_terminal(terminal: &mut DefaultTerminal) -> Result<()> {
+    enable_raw_mode()?;
+    execute!(stdout(), EnterAlternateScreen)?;
+    terminal.clear()?;
+    Ok(())
+}
 
 #[derive(Debug)]
 struct Entry {
@@ -77,10 +127,10 @@ enum InputMode {
 }
 
 impl App {
-    pub fn run(&mut self, terminal: &mut DefaultTerminal) -> std::io::Result<()> {
+    pub fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         while !self.exit {
             terminal.draw(|frame| self.draw(frame))?;
-            self.handle_events()?;
+            self.handle_events(terminal)?;
         }
         Ok(())
     }
@@ -89,23 +139,25 @@ impl App {
         frame.render_widget(self, frame.area());
     }
 
-    fn handle_events(&mut self) -> std::io::Result<()> {
+    fn handle_events(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         match event::read()? {
             Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
-                self.handle_key_event(key_event)
+                self.handle_key_event(key_event, terminal)
             }
             _ => {}
         };
         Ok(())
     }
 
-    fn handle_key_event(&mut self, key: KeyEvent) {
+    fn handle_key_event(&mut self, key: KeyEvent, terminal: &mut DefaultTerminal) {
         match self.input_mode {
             InputMode::Normal =>
                 match key.code {
                     KeyCode::Char('q') => self.exit(),
                     KeyCode::Char('a') => {
-                        self.input_mode = InputMode::EditingDate;
+                        restore_terminal().unwrap();
+                        open_editor();
+                        init_terminal(terminal).unwrap();
                     }
                     KeyCode::Char('t') => {
                         self.date += Duration::days(1);
