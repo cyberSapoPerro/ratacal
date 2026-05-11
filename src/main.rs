@@ -5,13 +5,12 @@ use std::io::stdout;
 use std::path::PathBuf;
 use std::process::Command;
 
-use crossterm::terminal;
 use time::Date;
 use time::Duration;
 use time::Month;
 use time::OffsetDateTime;
 use time::Time;
-use time::format_description::parse;
+// use time::format_description::parse;
 use time::macros::format_description;
 
 use crossterm::event::Event;
@@ -39,7 +38,7 @@ use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
 use ratatui::widgets::Cell;
 use ratatui::widgets::Padding;
-use ratatui::widgets::Paragraph;
+// use ratatui::widgets::Paragraph;
 use ratatui::widgets::Row;
 use ratatui::widgets::Table;
 use ratatui::widgets::Widget;
@@ -54,7 +53,7 @@ fn data_dir() -> PathBuf {
         .join("ratacal")
 }
 
-fn open_editor() -> Result<()> {
+fn open_editor() -> Result<String> {
     let base_dir = data_dir();
     fs::create_dir_all(&base_dir).unwrap();
     let fp = base_dir.join("note.md");
@@ -65,9 +64,9 @@ fn open_editor() -> Result<()> {
         .arg(&fp)
         .status()
         .unwrap();
+    // TODO Format Content
     let content = fs::read_to_string(&fp)?;
-    Ok(())
-    // content
+    Ok(content)
 }
 
 fn restore_terminal() -> Result<()> {
@@ -95,12 +94,6 @@ pub struct App {
     exit: bool,
     entries: Vec<Entry>,
     date: Date,
-
-    // input state
-    input_mode: InputMode,
-    input_date: String,
-    input_desc: String,
-    input_hour: String,
 }
 
 impl Default for App {
@@ -109,21 +102,8 @@ impl Default for App {
             exit: false,
             entries: Vec::new(),
             date: OffsetDateTime::now_utc().date(),
-            input_mode: InputMode::default(),
-            input_date: String::new(),
-            input_desc: String::new(),
-            input_hour: String::new(),
         }
     }
-}
-
-#[derive(Debug, Default)]
-enum InputMode {
-    #[default]
-    Normal,
-    EditingDate,
-    EditingDescription,
-    EditingHour,
 }
 
 impl App {
@@ -150,113 +130,54 @@ impl App {
     }
 
     fn handle_key_event(&mut self, key: KeyEvent, terminal: &mut DefaultTerminal) {
-        match self.input_mode {
-            InputMode::Normal =>
-                match key.code {
-                    KeyCode::Char('q') => self.exit(),
-                    KeyCode::Char('a') => {
-                        restore_terminal().unwrap();
-                        open_editor();
-                        init_terminal(terminal).unwrap();
-                    }
-                    KeyCode::Char('t') => {
-                        self.date += Duration::days(1);
-                    }
-                    KeyCode::Char('T') => {
-                        self.date -= Duration::days(1);
-                    }
-                    KeyCode::Char('w') => {
-                        self.date += Duration::weeks(1);
-                    }
-                    KeyCode::Char('W') => {
-                        self.date -= Duration::weeks(1);
-                    }
-                    KeyCode::Char('m') => {
-                        self.date += Duration::weeks(4);
-                    }
-                    KeyCode::Char('M') => {
-                        self.date -= Duration::weeks(4);
-                    }
-                    _ => {}
-                },
-
-            InputMode::EditingDate => match key.code {
-                KeyCode::Enter => {
-                    self.input_mode = InputMode::EditingDescription;
-                }
-                KeyCode::Char(c) => {
-                    self.input_date.push(c);
-                }
-                KeyCode::Backspace => {
-                    self.input_date.pop();
-                }
-                KeyCode::Esc => {
-                    self.cancel_input();
-                }
-                _ => {}
-            },
-
-            InputMode::EditingDescription => match key.code {
-                KeyCode::Enter => {
-                    self.input_mode = InputMode::EditingHour;
-                }
-                KeyCode::Char(c) => {
-                    self.input_desc.push(c);
-                }
-                KeyCode::Backspace => {
-                    self.input_desc.pop();
-                }
-                KeyCode::Esc => {
-                    self.cancel_input();
-                }
-                _ => {}
-            },
-
-            InputMode::EditingHour => match key.code {
-                KeyCode::Enter => {
-                    self.submit_event();
-                }
-                KeyCode::Char(c) if c.is_ascii_digit() => {
-                    self.input_hour.push(c);
-                }
-                KeyCode::Backspace => {
-                    self.input_hour.pop();
-                }
-                KeyCode::Esc => {
-                    self.cancel_input();
-                }
-                _ => {}
-            },
+        match key.code {
+            KeyCode::Char('q') => self.exit(),
+            KeyCode::Char('a') => {
+                restore_terminal().unwrap();
+                let event: String = open_editor().unwrap();
+                init_terminal(terminal).unwrap();
+                self.submit_event(event);
+            }
+            KeyCode::Char('t') => {
+                self.date += Duration::days(1);
+            }
+            KeyCode::Char('T') => {
+                self.date -= Duration::days(1);
+            }
+            KeyCode::Char('w') => {
+                self.date += Duration::weeks(1);
+            }
+            KeyCode::Char('W') => {
+                self.date -= Duration::weeks(1);
+            }
+            KeyCode::Char('m') => {
+                self.date += Duration::weeks(4);
+            }
+            KeyCode::Char('M') => {
+                self.date -= Duration::weeks(4);
+            }
+            _ => {}
         }
     }
 
-    fn submit_event(&mut self) {
-        // TODO Handle errors properly
-        let format_hour = parse("[hour][minute]").unwrap();
-        let hour_str = self.input_hour.clone();
-        let hour = Time::parse(&hour_str, &format_hour).unwrap();
-
-        let format_date = parse("[year]-[month]-[day]").unwrap();
-        let date_str = self.input_date.clone();
-        let day = Date::parse(&date_str, &format_date).unwrap();
-
-        self.entries.push(Entry {
-            description: self.input_desc.clone(),
-            hour,
-            day,
-        });
-        self.entries.sort_by_key(|e| e.hour);
-        self.reset_input();
-    }
-
-    fn cancel_input(&mut self) {
-        self.reset_input();
-    }
-
-    fn reset_input(&mut self) {
-        self.input_desc.clear();
-        self.input_hour.clear();
-        self.input_mode = InputMode::Normal;
+    fn submit_event(&mut self, event: String) {
+        // TODO
+        // let format_hour = parse("[hour][minute]").unwrap();
+        // let hour_str = self.input_hour.clone();
+        // let hour = Time::parse(&hour_str, &format_hour).unwrap();
+        //
+        // let format_date = parse("[year]-[month]-[day]").unwrap();
+        // let date_str = self.input_date.clone();
+        // let day = Date::parse(&date_str, &format_date).unwrap();
+        //
+        // self.entries.push(Entry {
+        //     description: self.input_desc.clone(),
+        //     hour,
+        //     day,
+        // });
+        // self.entries.sort_by_key(|e| e.hour);
+        // self.reset_input();
+        todo!();
     }
 
     fn exit(&mut self) {
@@ -271,7 +192,6 @@ impl Widget for &App {
             .constraints([
                 Constraint::Length(12),
                 Constraint::Min(0),
-                Constraint::Length(3),
             ])
             .split(area);
 
@@ -384,24 +304,6 @@ impl Widget for &App {
             )
             .highlight_symbol(">>")
             .render(table_area, buf);
-
-        let input = match self.input_mode {
-            InputMode::EditingDate => {
-                Paragraph::new(format!("Date: {}", self.input_date))
-            }
-            InputMode::EditingDescription => {
-                Paragraph::new(format!("Desc: {}", self.input_desc))
-            }
-            InputMode::EditingHour => {
-                Paragraph::new(format!("Hour: {}", self.input_hour))
-            }
-            InputMode::Normal => {
-                Paragraph::new("Press 'a' to add events")
-            }
-        };
-
-        input.block(Block::default().title("New Event").borders(Borders::ALL))
-            .render(chunks[2], buf);
     }
 }
 
